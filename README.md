@@ -1,5 +1,6 @@
 # SerikaPay Rust library
 
+[![CI](https://github.com/serika-dev/serikapay-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/serika-dev/serikapay-rust/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/serikapay)](https://crates.io/crates/serikapay)
 [![docs.rs](https://img.shields.io/docsrs/serikapay)](https://docs.rs/serikapay)
 

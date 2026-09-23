@@ -12,7 +12,10 @@ fn payment() -> Value {
 }
 
 fn client(server: &MockServer) -> Client {
-    Client::builder("sk_test_abc12345").base_url(server.uri()).max_retries(2).build()
+    Client::builder("sk_test_abc12345")
+        .base_url(server.uri())
+        .max_retries(2)
+        .build()
 }
 
 #[tokio::test]
@@ -43,14 +46,30 @@ async fn create_payment() {
     assert_eq!(p.metadata["orderId"], "1042");
 
     let reqs = server.received_requests().await.unwrap();
-    assert!(reqs[0].headers.get("user-agent").unwrap().to_str().unwrap().starts_with("serikapay-rust/"));
+    assert!(reqs[0]
+        .headers
+        .get("user-agent")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .starts_with("serikapay-rust/"));
 }
 
 #[tokio::test]
 async fn create_generates_idempotency_key() {
     let server = MockServer::start().await;
-    Mock::given(method("POST")).respond_with(ResponseTemplate::new(200).set_body_json(payment())).mount(&server).await;
-    client(&server).payments().create(CreatePayment { amount: 1.0, ..Default::default() }).await.unwrap();
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(payment()))
+        .mount(&server)
+        .await;
+    client(&server)
+        .payments()
+        .create(CreatePayment {
+            amount: 1.0,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
     let reqs = server.received_requests().await.unwrap();
     assert!(reqs[0].headers.get("x-idempotency-key").unwrap().len() >= 16);
 }
@@ -58,11 +77,19 @@ async fn create_generates_idempotency_key() {
 #[tokio::test]
 async fn routes() {
     let server = MockServer::start().await;
-    Mock::given(method("GET")).and(path("/v1/payments/pay_m1x2y3")).respond_with(ResponseTemplate::new(200).set_body_json(payment())).expect(1).mount(&server).await;
+    Mock::given(method("GET"))
+        .and(path("/v1/payments/pay_m1x2y3"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(payment()))
+        .expect(1)
+        .mount(&server)
+        .await;
     Mock::given(method("GET"))
         .and(path("/v1/payments"))
         .and(query_param("limit", "3"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "object": "list", "data": [payment()], "hasMore": false })))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "object": "list", "data": [payment()], "hasMore": false })),
+        )
         .expect(1)
         .mount(&server)
         .await;
@@ -91,13 +118,18 @@ async fn balance_and_transactions() {
     Mock::given(path("/v1/transactions"))
         .and(query_param("limit", "20"))
         .and(query_param("type", "spend"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "object": "list", "data": [] })))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "object": "list", "data": [] })),
+        )
         .expect(1)
         .mount(&server)
         .await;
     let c = client(&server);
     assert_eq!(c.balance().retrieve().await.unwrap().available, 10.0);
-    c.transactions().list(Some(20), Some("spend")).await.unwrap();
+    c.transactions()
+        .list(Some(20), Some("spend"))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -107,7 +139,14 @@ async fn api_error() {
         .respond_with(ResponseTemplate::new(400).set_body_json(json!({ "error": { "type": "insufficient_balance", "message": "Insufficient", "available": 3 } })))
         .mount(&server)
         .await;
-    match client(&server).payments().create(CreatePayment { amount: 4.99, ..Default::default() }).await {
+    match client(&server)
+        .payments()
+        .create(CreatePayment {
+            amount: 4.99,
+            ..Default::default()
+        })
+        .await
+    {
         Err(Error::Api(e)) => {
             assert_eq!(e.error_type, "insufficient_balance");
             assert_eq!(e.status, 400);
@@ -120,21 +159,45 @@ async fn api_error() {
 #[tokio::test]
 async fn retries() {
     let server = MockServer::start().await;
-    Mock::given(method("GET")).respond_with(ResponseTemplate::new(503)).up_to_n_times(1).mount(&server).await;
-    Mock::given(method("GET")).respond_with(ResponseTemplate::new(200).set_body_json(payment())).mount(&server).await;
-    client(&server).payments().retrieve("pay_m1x2y3").await.unwrap();
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(503))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(payment()))
+        .mount(&server)
+        .await;
+    client(&server)
+        .payments()
+        .retrieve("pay_m1x2y3")
+        .await
+        .unwrap();
     assert_eq!(server.received_requests().await.unwrap().len(), 2);
 
     let server = MockServer::start().await;
-    Mock::given(method("POST")).respond_with(ResponseTemplate::new(500)).mount(&server).await;
-    assert!(client(&server).payments().refund("pay_m1x2y3", None).await.is_err());
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+    assert!(client(&server)
+        .payments()
+        .refund("pay_m1x2y3", None)
+        .await
+        .is_err());
     assert_eq!(server.received_requests().await.unwrap().len(), 1);
 }
 
 #[tokio::test]
 async fn connection_error() {
-    let c = Client::builder("sk_test_abc12345").base_url("http://127.0.0.1:1").max_retries(0).build();
-    assert!(matches!(c.balance().retrieve().await, Err(Error::Connection(_))));
+    let c = Client::builder("sk_test_abc12345")
+        .base_url("http://127.0.0.1:1")
+        .max_retries(0)
+        .build();
+    assert!(matches!(
+        c.balance().retrieve().await,
+        Err(Error::Connection(_))
+    ));
 }
 
 const PAYLOAD: &str = r#"{"id":"evt_1","object":"event","type":"payment.completed","createdAt":"2026-09-23T12:00:00.000Z","data":{"id":"pay_m1x2y3","amount":4.99}}"#;
@@ -147,7 +210,16 @@ fn webhooks() {
     let event = webhook::construct_event(PAYLOAD, SIG, SECRET).unwrap();
     assert_eq!(event.event_type, "payment.completed");
     assert_eq!(event.data["id"], "pay_m1x2y3");
-    assert!(matches!(webhook::construct_event(PAYLOAD.replace("4.99", "499"), SIG, SECRET), Err(Error::InvalidSignature)));
-    assert!(matches!(webhook::construct_event(PAYLOAD, SIG, "nope"), Err(Error::InvalidSignature)));
-    assert!(matches!(webhook::construct_event(PAYLOAD, "", SECRET), Err(Error::InvalidSignature)));
+    assert!(matches!(
+        webhook::construct_event(PAYLOAD.replace("4.99", "499"), SIG, SECRET),
+        Err(Error::InvalidSignature)
+    ));
+    assert!(matches!(
+        webhook::construct_event(PAYLOAD, SIG, "nope"),
+        Err(Error::InvalidSignature)
+    ));
+    assert!(matches!(
+        webhook::construct_event(PAYLOAD, "", SECRET),
+        Err(Error::InvalidSignature)
+    ));
 }

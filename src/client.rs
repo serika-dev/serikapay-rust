@@ -51,7 +51,12 @@ impl ClientBuilder {
             .user_agent(format!("serikapay-rust/{VERSION}"))
             .build()
             .expect("failed to build HTTP client");
-        Client { http, api_key: self.api_key, base_url: self.base_url, max_retries: self.max_retries }
+        Client {
+            http,
+            api_key: self.api_key,
+            base_url: self.base_url,
+            max_retries: self.max_retries,
+        }
     }
 }
 
@@ -91,7 +96,10 @@ impl Client {
         idempotency_key: Option<&str>,
     ) -> Result<T, Error> {
         let url = format!("{}{}", self.base_url, path);
-        let query: Vec<(&str, String)> = query.iter().filter_map(|(k, v)| v.clone().map(|v| (*k, v))).collect();
+        let query: Vec<(&str, String)> = query
+            .iter()
+            .filter_map(|(k, v)| v.clone().map(|v| (*k, v)))
+            .collect();
         let retryable = method == Method::GET || idempotency_key.is_some();
 
         let mut attempt = 0;
@@ -124,7 +132,10 @@ impl Client {
             };
 
             let status = res.status();
-            if (status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()) && retryable && attempt < self.max_retries {
+            if (status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error())
+                && retryable
+                && attempt < self.max_retries
+            {
                 backoff(attempt).await;
                 attempt += 1;
                 continue;
@@ -136,7 +147,11 @@ impl Client {
                     .and_then(|v| v.get("error").and_then(|e| e.as_object()).cloned())
                     .unwrap_or_default();
                 return Err(Error::Api(ApiError {
-                    error_type: raw.get("type").and_then(Value::as_str).unwrap_or("api_error").to_string(),
+                    error_type: raw
+                        .get("type")
+                        .and_then(Value::as_str)
+                        .unwrap_or("api_error")
+                        .to_string(),
                     message: raw
                         .get("message")
                         .and_then(Value::as_str)
@@ -153,7 +168,10 @@ impl Client {
 
 async fn backoff(attempt: u32) {
     let base = (500u64 << attempt.min(4)).min(5_000);
-    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos() as u64).unwrap_or(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as u64)
+        .unwrap_or(0);
     let ms = base / 2 + nanos % (base / 2 + 1);
     tokio::time::sleep(Duration::from_millis(ms)).await;
 }
@@ -161,7 +179,9 @@ async fn backoff(attempt: u32) {
 fn seg(id: &str) -> String {
     id.bytes()
         .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
             _ => format!("%{b:02X}"),
         })
         .collect()
@@ -175,18 +195,39 @@ pub struct Payments<'a> {
 impl Payments<'_> {
     /// Charge your wallet. Returns the completed payment.
     pub async fn create(&self, params: CreatePayment) -> Result<Payment, Error> {
-        let key = params.idempotency_key.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let key = params
+            .idempotency_key
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let body = serde_json::to_value(&params)?;
-        self.client.request(Method::POST, "/v1/payments", &[], Some(body), Some(&key)).await
+        self.client
+            .request(Method::POST, "/v1/payments", &[], Some(body), Some(&key))
+            .await
     }
 
     pub async fn retrieve(&self, id: &str) -> Result<Payment, Error> {
-        self.client.request(Method::GET, &format!("/v1/payments/{}", seg(id)), &[], None, None).await
+        self.client
+            .request(
+                Method::GET,
+                &format!("/v1/payments/{}", seg(id)),
+                &[],
+                None,
+                None,
+            )
+            .await
     }
 
     /// Up to `limit` (1–100, default 10) recent payments.
     pub async fn list(&self, limit: Option<u32>) -> Result<List<Payment>, Error> {
-        self.client.request(Method::GET, "/v1/payments", &[("limit", limit.map(|l| l.to_string()))], None, None).await
+        self.client
+            .request(
+                Method::GET,
+                "/v1/payments",
+                &[("limit", limit.map(|l| l.to_string()))],
+                None,
+                None,
+            )
+            .await
     }
 
     /// Refund all of a completed payment (`None`), or `amount` of it.
@@ -195,7 +236,15 @@ impl Payments<'_> {
             Some(a) => json!({ "amount": a }),
             None => json!({}),
         };
-        self.client.request(Method::POST, &format!("/v1/payments/{}/refund", seg(id)), &[], Some(body), None).await
+        self.client
+            .request(
+                Method::POST,
+                &format!("/v1/payments/{}/refund", seg(id)),
+                &[],
+                Some(body),
+                None,
+            )
+            .await
     }
 }
 
@@ -212,7 +261,15 @@ impl Balances<'_> {
 
     /// The balance of one ledger currency: EUR, USD or JPY.
     pub async fn retrieve_currency(&self, currency: &str) -> Result<Balance, Error> {
-        self.client.request(Method::GET, "/v1/balance", &[("currency", Some(currency.to_string()))], None, None).await
+        self.client
+            .request(
+                Method::GET,
+                "/v1/balance",
+                &[("currency", Some(currency.to_string()))],
+                None,
+                None,
+            )
+            .await
     }
 }
 
@@ -223,12 +280,19 @@ pub struct Transactions<'a> {
 
 impl Transactions<'_> {
     /// `kind` is purchase, spend, refund or adjustment.
-    pub async fn list(&self, limit: Option<u32>, kind: Option<&str>) -> Result<List<Transaction>, Error> {
+    pub async fn list(
+        &self,
+        limit: Option<u32>,
+        kind: Option<&str>,
+    ) -> Result<List<Transaction>, Error> {
         self.client
             .request(
                 Method::GET,
                 "/v1/transactions",
-                &[("limit", limit.map(|l| l.to_string())), ("type", kind.map(str::to_string))],
+                &[
+                    ("limit", limit.map(|l| l.to_string())),
+                    ("type", kind.map(str::to_string)),
+                ],
                 None,
                 None,
             )

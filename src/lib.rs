@@ -20,6 +20,8 @@ mod error;
 mod models;
 pub mod webhook;
 
-pub use client::{Balances, Client, ClientBuilder, Payments, Transactions, DEFAULT_BASE_URL, VERSION};
+pub use client::{
+    Balances, Client, ClientBuilder, Payments, Transactions, DEFAULT_BASE_URL, VERSION,
+};
 pub use error::{ApiError, Error};
 pub use models::*;
